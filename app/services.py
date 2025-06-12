@@ -1,180 +1,3 @@
-# import pymysql
-# import pandas as pd
-# import numpy as np
-# from datetime import datetime
-# from CoolProp.CoolProp import PropsSI
-
-# MODELOS_STD = {
-#     't_ev': 2, 't_cd': 2, 'rec': 2, 'subf': 2, 'dt_ev': 1,
-#     'dt_cd': 1, 'dta_evap': 1, 'dta_cond': 1, 'cop': 0.5,
-#     'ef_comp': 0.05, 'pot_frig': 100
-# }
-
-# def get_connection():
-#     return pymysql.connect(
-#         host="5.134.116.201",
-#         port=3306,
-#         user="juandeeu_digital",
-#         password="ContraseN.4",
-#         database="juandeeu_db"
-#     )
-
-# def fetch_last_record():
-#     conn = get_connection()
-#     cur = conn.cursor()
-#     cur.execute("""
-#         SELECT
-#             fecha, pa, pb, t_asp, t_des, t_liq,
-#             ta_in_cond AS t_amb,
-#             ta_in_evap AS t_cam,
-#             ta_out_cond, ta_out_evap, pot_abs
-#         FROM incalab
-#         ORDER BY id DESC
-#         LIMIT 1
-#     """)
-#     row = cur.fetchone()
-#     conn.close()
-#     keys = ['fecha','pa','pb','t_asp','t_des','t_liq','t_amb','t_cam','ta_out_cond','ta_out_evap','pot_abs']
-#     return dict(zip(keys, row))
-
-# def fetch_historical_records(limit=1800):
-#     conn = get_connection()
-#     cur = conn.cursor()
-#     cur.execute("""
-#         SELECT fecha, pa, pb, t_asp, t_des, t_liq,
-#                ta_in_cond AS t_amb, ta_in_evap AS t_cam,
-#                ta_out_cond, ta_out_evap, pot_abs
-#         FROM incalab
-#         ORDER BY id DESC
-#         LIMIT %s
-#     """, (limit,))
-#     rows = cur.fetchall()
-#     columns = ['fecha','pa','pb','t_asp','t_des','t_liq','t_amb','t_cam','ta_out_cond','ta_out_evap','pot_abs']
-#     conn.close()
-#     df = pd.DataFrame(rows, columns=columns)
-#     df = df.fillna(0)
-#     return df.to_dict(orient="records")
-
-
-# # def fetch_historical_records(limit=300000):
-# #     conn = get_connection()
-# #     cur = conn.cursor()
-# #     cur.execute("""
-# #         SELECT fecha, pa, pb, t_asp, t_des, t_liq,
-# #                ta_in_cond AS t_amb, ta_in_evap AS t_cam,
-# #                ta_out_cond, ta_out_evap, pot_abs
-# #         FROM incalab
-# #         ORDER BY id DESC
-# #         LIMIT %s
-# #     """, (limit,))
-# #     rows = cur.fetchall()
-# #     columns = ['fecha','pa','pb','t_asp','t_des','t_liq','t_amb','t_cam','ta_out_cond','ta_out_evap','pot_abs']
-# #     conn.close()
-# #     df = pd.DataFrame(rows, columns=columns)
-# #     df = df.fillna(0)
-# #     return df.to_dict(orient="records")
-
-# def calcular_variables(df: pd.DataFrame):
-#     df = df.copy()
-#     for col in df.columns:
-#         if col != "fecha":
-#             df[col] = pd.to_numeric(df[col], errors="coerce")
-#     df = df.fillna(0)
-
-#     pa = df.iloc[0]["pa"]
-#     pb = df.iloc[0]["pb"]
-#     t_asp = df.iloc[0]["t_asp"]
-#     t_liq = df.iloc[0]["t_liq"]
-#     t_des = df.iloc[0]["t_des"]
-#     t_cam = df.iloc[0]["t_cam"]
-#     t_amb = df.iloc[0]["t_amb"]
-#     ta_out_evap = df.iloc[0]["ta_out_evap"]
-#     ta_out_cond = df.iloc[0]["ta_out_cond"]
-#     pot_abs = df.iloc[0]["pot_abs"]
-
-#     t_ev = np.round(PropsSI('T', 'P', (pb + 1) * 1e5, 'Q', 1, 'R290') - 273.15, 2)
-#     t_cd = np.round(PropsSI('T', 'P', (pa + 1) * 1e5, 'Q', 0, 'R290') - 273.15, 2)
-
-#     t_asp = max(t_asp, t_ev)
-#     t_liq = min(t_liq, t_cd)
-
-#     rec = np.round(t_asp - t_ev, 2)
-#     subf = np.round(t_cd - t_liq, 2)
-#     dt_ev = np.round(t_cam - t_ev, 2)
-#     dt_cd = np.round(t_cd - t_amb, 2)
-#     dta_evap = np.round(t_cam - ta_out_evap, 2)
-#     dta_cond = np.round(ta_out_cond - t_amb, 2)
-
-#     def entalpia(P_bar, T_C):
-#         return PropsSI('H', 'P', (P_bar + 1) * 1e5, 'T', T_C + 273.15, 'R290') / 1000
-
-#     h_liq = entalpia(pa, t_liq)
-#     h_asp = entalpia(pb, t_asp)
-#     h_des = entalpia(pa, t_des)
-
-#     try:
-#         cop_val = (h_asp - h_liq) / (h_des - h_asp)
-#     except ZeroDivisionError:
-#         cop_val = 0
-#     cop = np.round(cop_val, 2)
-
-#     try:
-#         s_asp = PropsSI('S', 'P', (pb + 1) * 1e5, 'T', t_asp + 273.15, 'R290') / 1000
-#         h_des_iso = PropsSI('H', 'P', (pa + 1) * 1e5, 'S', s_asp * 1000, 'R290') / 1000
-#         ef_comp_val = (h_des_iso - h_asp) / (h_des - h_asp)
-#     except:
-#         ef_comp_val = 0
-#     ef_comp = np.round(ef_comp_val, 3)
-
-#     pot_frig = np.round(pot_abs * cop, 1)
-
-#     resultado = {
-#         't_ev': t_ev, 't_cd': t_cd, 'rec': rec, 'subf': subf,
-#         'dt_ev': dt_ev, 'dt_cd': dt_cd, 'dta_evap': dta_evap,
-#         'dta_cond': dta_cond, 'cop': cop, 'ef_comp': ef_comp,
-#         'pot_frig': pot_frig, 'pot_abs': pot_abs, 'pa': pa, 'pb': pb,
-#         't_asp': t_asp, 't_liq': t_liq, 't_des': t_des, 't_cam': t_cam,
-#         't_amb': t_amb, 'ta_out_evap': ta_out_evap, 'ta_out_cond': ta_out_cond
-#     }
-#     if 'fecha' in df.columns:
-#         resultado['fecha'] = df.iloc[0]['fecha']
-
-#     return resultado
-
-# def calcular_tabla_comparativa(df: pd.DataFrame):
-#     registros = []
-
-#     for _, row in df.iterrows():
-#         fila = pd.DataFrame([row])
-
-#         for col in fila.columns:
-#             if col != "fecha":
-#                 fila[col] = pd.to_numeric(fila[col], errors="coerce")
-#         fila = fila.fillna(0)
-
-#         real = calcular_variables(fila)
-#         esperado = {k: round(real[k] * 0.95, 2) if k in MODELOS_STD else real[k] for k in real}
-
-#         real['registro'] = 'real'
-#         esperado['registro'] = 'esperado'
-#         registros.append(real)
-#         registros.append(esperado)
-
-#         desviacion = {'registro': 'desviación'}
-#         for var in MODELOS_STD:
-#             desviacion[var] = round(real[var] - esperado[var], 2)
-#         registros.append(desviacion)
-
-#         n_sd = {'registro': 'n_sd'}
-#         for var in MODELOS_STD:
-#             std = MODELOS_STD[var]
-#             n_sd[var] = round(desviacion[var] / std if std != 0 else 0, 2)
-#         registros.append(n_sd)
-
-#     return registros
-
-
-
 import os
 import pickle
 import numpy as np
@@ -201,6 +24,7 @@ MODELOS_STD = {
     'cop': 0.5, 'ef_comp': 0.05
 }
 
+#Función con las variables de la BBDD
 def get_connection():
     return pymysql.connect(
         host="5.134.116.201",
@@ -210,6 +34,7 @@ def get_connection():
         database="juandeeu_db"
     )
 
+#Función para la conexion de la base de datos y la consulta SQL
 def fetch_last_record():
     conn = get_connection()
     cur = conn.cursor()
@@ -228,6 +53,7 @@ def fetch_last_record():
     keys = ['fecha','pa','pb','t_asp','t_des','t_liq','t_amb','t_cam','ta_out_cond','ta_out_evap','pot_abs']
     return dict(zip(keys, row))
 
+#Función para sacar los datos de la base de datos limitados para que no tarde tanto en cargar
 def fetch_historical_records(limit=1800):
     conn = get_connection()
     cur = conn.cursor()
@@ -246,6 +72,7 @@ def fetch_historical_records(limit=1800):
     df = df.fillna(0)
     return df.to_dict(orient="records")
 
+#Finción para cargar los modelos
 def cargar_modelo(nombre):
     path = os.path.join(MODELS_DIR, nombre)
     with open(path, 'rb') as f:
@@ -253,6 +80,7 @@ def cargar_modelo(nombre):
 
 modelos = {k: cargar_modelo(v) for k, v in MODELOS_PKL.items()}
 
+#Función para calcular los valores generales
 def calcular_variables(df: pd.DataFrame):
     df = df.copy()
     for col in df.columns:
@@ -276,6 +104,7 @@ def calcular_variables(df: pd.DataFrame):
 
     return df.iloc[0].to_dict()
 
+#Función para calcular los valores de la tabla
 def calcular_tabla_comparativa(df: pd.DataFrame):
     fila = df.copy().fillna(0)
     real = calcular_variables(fila)
